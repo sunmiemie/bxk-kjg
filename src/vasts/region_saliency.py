@@ -44,7 +44,7 @@ def _patch_from_mask(mask: np.ndarray, gray: np.ndarray, bins: int) -> Patch | N
 
 
 def _quantized_components(gray: np.ndarray, levels: int, bins: int, min_patch_area: int) -> list[Patch]:
-    quantized = np.clip(gray.astype(np.int16) * int(levels) // 256, 0, int(levels) - 1).astype(np.uint8)
+    quantized = np.clip(gray.astype(np.int32) * int(levels) // 256, 0, int(levels) - 1).astype(np.uint8)
     patches: list[Patch] = []
     for level in range(int(levels)):
         mask = (quantized == level).astype(np.uint8)

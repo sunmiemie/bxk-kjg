@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import copy
+import math
 from pathlib import Path
 from typing import Any
 
@@ -80,12 +82,12 @@ DEFAULT_CONFIG: dict[str, Any] = {
 
 
 def deep_update(base: dict[str, Any], updates: dict[str, Any]) -> dict[str, Any]:
-    merged = {key: value.copy() if isinstance(value, dict) else value for key, value in base.items()}
+    merged = copy.deepcopy(base)
     for key, value in updates.items():
         if isinstance(value, dict) and isinstance(merged.get(key), dict):
             merged[key] = deep_update(merged[key], value)
         else:
-            merged[key] = value
+            merged[key] = copy.deepcopy(value)
     return merged
 
 
@@ -95,6 +97,12 @@ def _require_number(config: dict[str, Any], dotted: str, *, min_value: float | N
         current = current[part]
     if not isinstance(current, (int, float)) or isinstance(current, bool):
         raise ValueError(f"{dotted} must be a number")
+    try:
+        finite = math.isfinite(current)
+    except OverflowError:
+        finite = False
+    if not finite:
+        raise ValueError(f"{dotted} must be finite")
     if min_value is not None and float(current) < min_value:
         raise ValueError(f"{dotted} must be >= {min_value:g}")
     if max_value is not None and float(current) > max_value:
@@ -125,6 +133,11 @@ def _require_bool(config: dict[str, Any], dotted: str) -> None:
 
 
 def _validate_config(config: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(config, dict):
+        raise ValueError("Configuration must be an object")
+    unknown = set(config) - set(DEFAULT_CONFIG)
+    if unknown:
+        raise ValueError(f"Unknown configuration sections: {', '.join(sorted(unknown))}")
     required_sections = [
         "registration",
         "temporal",
@@ -140,6 +153,14 @@ def _validate_config(config: dict[str, Any]) -> dict[str, Any]:
     for section in required_sections:
         if not isinstance(config.get(section), dict):
             raise ValueError(f"{section} must be a JSON object")
+        unknown = set(config[section]) - set(DEFAULT_CONFIG[section])
+        if unknown:
+            raise ValueError(f"Unknown {section} settings: {', '.join(sorted(unknown))}")
+        for key, default in DEFAULT_CONFIG[section].items():
+            value = config[section].get(key)
+            if isinstance(default, int) and not isinstance(default, bool):
+                if not isinstance(value, int) or isinstance(value, bool):
+                    raise ValueError(f"{section}.{key} must be an integer")
 
     _require_number(config, "registration.orb_features", min_value=1)
     _require_number(config, "registration.min_matches", min_value=1)
@@ -155,7 +176,7 @@ def _validate_config(config: dict[str, Any]) -> dict[str, Any]:
     _require_bool(config, "spatial.region_enabled")
     _require_number(config, "spatial.cr_factor", min_value=1)
     _require_number(config, "spatial.er_factor", min_value=1)
-    _require_number(config, "spatial.region_quantization_levels", min_value=2)
+    _require_number(config, "spatial.region_quantization_levels", min_value=2, max_value=256)
     _require_number(config, "spatial.region_hist_bins", min_value=2)
     _require_number(config, "spatial.region_grid_size", min_value=2)
     _require_number(config, "spatial.min_patch_area", min_value=1)
@@ -166,9 +187,10 @@ def _validate_config(config: dict[str, Any]) -> dict[str, Any]:
     if method not in {"otsu", "percentile", "fixed"}:
         raise ValueError("thresholding.method must be one of: otsu, percentile, fixed")
     _require_number(config, "thresholding.fixed", min_value=0, max_value=1)
-    percentile = config["thresholding"].get("percentile")
-    if not isinstance(percentile, (int, float)) or isinstance(percentile, bool) or not 0 <= float(percentile) <= 100:
-        raise ValueError("thresholding.percentile must be between 0 and 100")
+    try:
+        _require_number(config, "thresholding.percentile", min_value=0, max_value=100)
+    except ValueError as exc:
+        raise ValueError("thresholding.percentile must be between 0 and 100") from exc
     _require_number(config, "postprocess.morph_kernel", min_value=1)
     _require_number(config, "postprocess.min_area", min_value=1)
     _require_number(config, "postprocess.max_area_ratio", min_value=0, max_value=1)
@@ -183,8 +205,8 @@ def _validate_config(config: dict[str, Any]) -> dict[str, Any]:
         if not isinstance(rect, dict):
             raise ValueError(f"roi.ignore_rectangles[{index}] must be a JSON object")
         for key in ["x", "y", "w", "h"]:
-            if key not in rect or not isinstance(rect[key], (int, float)) or isinstance(rect[key], bool) or float(rect[key]) < 0:
-                raise ValueError(f"roi.ignore_rectangles[{index}].{key} must be a non-negative number")
+            if key not in rect or not isinstance(rect[key], int) or isinstance(rect[key], bool) or rect[key] < 0:
+                raise ValueError(f"roi.ignore_rectangles[{index}].{key} must be a non-negative integer")
     _require_number(config, "box_filter.min_width", min_value=1)
     _require_number(config, "box_filter.min_height", min_value=1)
     _require_optional_number(config, "box_filter.max_width", min_value=1)
@@ -202,6 +224,21 @@ def _validate_config(config: dict[str, Any]) -> dict[str, Any]:
     _require_number(config, "synthetic.width", min_value=16)
     _require_number(config, "synthetic.height", min_value=16)
     _require_number(config, "synthetic.fps", min_value=1)
+    for section, low, high in [("roi", "x_min", "x_max"), ("roi", "y_min", "y_max"),
+                               ("box_filter", "min_width", "max_width"), ("box_filter", "min_height", "max_height"),
+                               ("static_target", "min_area", "max_area"), ("static_target", "min_width", "max_width"),
+                               ("static_target", "min_height", "max_height")]:
+        upper = config[section][high]
+        if upper is not None:
+            if not isinstance(upper, int) or isinstance(upper, bool):
+                raise ValueError(f"{section}.{high} must be an integer or null")
+            if upper < config[section][low] or (section == "roi" and upper == config[section][low]):
+                raise ValueError(f"{section}.{high} must exceed or bound {low}")
+    if config["spatial"]["er_factor"] < config["spatial"]["cr_factor"]:
+        raise ValueError("spatial.er_factor must be >= spatial.cr_factor")
+    fusion_total = sum(config["fusion"].values())
+    if not math.isfinite(fusion_total) or fusion_total <= 0:
+        raise ValueError("Fusion weights must have a finite positive total")
     return config
 
 
@@ -218,12 +255,14 @@ def load_config(config_arg: str | Path | None = None) -> dict[str, Any]:
             raise ValueError(f"Invalid inline JSON config: {exc}") from exc
     else:
         path = Path(raw)
-        if not path.exists():
-            raise ValueError(f"Configuration file not found: {path}")
         try:
-            updates = json.loads(path.read_text(encoding="utf-8"))
+            updates = json.loads(path.read_text(encoding="utf-8-sig"))
+        except FileNotFoundError as exc:
+            raise ValueError(f"Configuration file not found: {path}") from exc
         except json.JSONDecodeError as exc:
             raise ValueError(f"Invalid JSON config file {path}: {exc}") from exc
+        except (OSError, UnicodeError) as exc:
+            raise ValueError(f"Could not read configuration file {path}: {exc}") from exc
     if not isinstance(updates, dict):
         raise ValueError("Configuration JSON must be an object.")
     return _validate_config(deep_update(DEFAULT_CONFIG, updates))
