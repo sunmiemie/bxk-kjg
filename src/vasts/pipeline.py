@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -8,7 +9,7 @@ from typing import Any
 import numpy as np
 import cv2
 
-from .config import DEFAULT_CONFIG, deep_update
+from .config import DEFAULT_CONFIG, deep_update, _validate_config
 from .fusion import fuse_saliency, postprocess_mask, threshold_saliency
 from .image_utils import colorize_saliency, ensure_gray, to_uint8
 from .pixel_saliency import pixel_saliency_map
@@ -30,6 +31,7 @@ class PipelineResult:
 def _open_capture(input_path: str | Path) -> cv2.VideoCapture:
     capture = cv2.VideoCapture(str(input_path))
     if not capture.isOpened():
+        capture.release()
         raise FileNotFoundError(f"Could not open input video: {input_path}")
     return capture
 
@@ -37,8 +39,14 @@ def _open_capture(input_path: str | Path) -> cv2.VideoCapture:
 def _create_writer(path: Path, fps: float, size: tuple[int, int]) -> cv2.VideoWriter:
     writer = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"mp4v"), float(fps), size)
     if not writer.isOpened():
+        writer.release()
         raise RuntimeError(f"Could not open video writer: {path}")
     return writer
+
+
+def _capture_fps(capture) -> float:
+    fps = float(capture.get(cv2.CAP_PROP_FPS))
+    return fps if math.isfinite(fps) and fps > 0 else 10.0
 
 
 def _draw_overlay(frame: np.ndarray, boxes: list[dict[str, Any]], frame_index: int) -> np.ndarray:
@@ -136,15 +144,23 @@ def run_pipeline(
     config: dict[str, Any] | None = None,
     source_mode: str = "input",
 ) -> PipelineResult:
-    cfg = deep_update(DEFAULT_CONFIG, config or {})
+    if config is not None and not isinstance(config, dict):
+        raise ValueError("config must be a dictionary or None")
+    if max_frames is not None and (isinstance(max_frames, bool) or not isinstance(max_frames, int) or max_frames <= 0):
+        raise ValueError("max_frames must be a positive integer or None")
+    cfg = _validate_config(deep_update(DEFAULT_CONFIG, config or {}))
     out_dir = Path(output_dir)
+    input_resolved = Path(input_path).resolve()
+    for name in ("overlay.mp4", "saliency.mp4", "boxes.json"):
+        if input_resolved == (out_dir / name).resolve():
+            raise ValueError("Input video must not be one of the output files")
     out_dir.mkdir(parents=True, exist_ok=True)
     capture = _open_capture(input_path)
-    fps = capture.get(cv2.CAP_PROP_FPS) or 10.0
 
     overlay_writer = None
     saliency_writer = None
     try:
+        fps = _capture_fps(capture)
         ok, frame = capture.read()
         if not ok:
             raise ValueError(f"Input video has no frames: {input_path}")
@@ -175,6 +191,8 @@ def run_pipeline(
                 break
 
             gray = ensure_gray(frame)
+            if gray.shape != prev_gray.shape:
+                raise ValueError("Input video dimensions changed during processing")
             registered_prev, _, _ = register_frame(gray, prev_gray, **cfg["registration"])
             diff = registered_difference(gray, registered_prev)
             fmhi = compute_fmhi(

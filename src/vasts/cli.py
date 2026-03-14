@@ -31,12 +31,16 @@ def _positive_int(value: str) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    try:
+        return _run(args)
+    except (ValueError, OSError, RuntimeError) as exc:
+        parser.error(str(exc))
+
+
+def _run(args) -> int:
+    config = load_config(args.config)
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    try:
-        config = load_config(args.config)
-    except ValueError as exc:
-        parser.error(str(exc))
 
     if args.synthetic:
         synth_cfg = config["synthetic"]
@@ -52,7 +56,7 @@ def main(argv: list[str] | None = None) -> int:
         input_path = Path(args.input_path)
         source_mode = "input"
     else:
-        parser.error("Provide --synthetic or --input VIDEO")
+        raise ValueError("Provide --synthetic or --input VIDEO")
 
     result = run_pipeline(
         input_path=input_path,
