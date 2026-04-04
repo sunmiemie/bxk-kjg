@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from pathlib import Path
 
 import cv2
 
-from .pipeline import _create_writer, _draw_overlay, _open_capture
+from .pipeline import _create_writer, _draw_overlay, _open_capture, _capture_fps
 from .tracking import fill_single_track_gaps
 
 
@@ -39,10 +40,12 @@ def _draw_padded_overlay(frame, boxes, frame_index: int):
 
 
 def render_tracked_overlay(input_video: str | Path, frames: list[dict], output_path: str | Path) -> None:
+    if Path(input_video).resolve() == Path(output_path).resolve():
+        raise ValueError("Tracked overlay must not overwrite the input video")
     capture = _open_capture(input_video)
-    fps = capture.get(cv2.CAP_PROP_FPS) or 10.0
     writer = None
     try:
+        fps = _capture_fps(capture)
         ok, frame = capture.read()
         if not ok:
             raise ValueError(f"Input video has no frames: {input_video}")
@@ -65,18 +68,25 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.max_gap < 0:
         parser.error("--max-gap must be >= 0")
-    if args.max_distance <= 0:
-        parser.error("--max-distance must be > 0")
+    if not math.isfinite(args.max_distance) or args.max_distance <= 0:
+        parser.error("--max-distance must be finite and > 0")
+    try:
+        return _run(args)
+    except (OSError, UnicodeError, ValueError, RuntimeError) as exc:
+        parser.error(str(exc))
+
+
+def _run(args) -> int:
 
     boxes_path = Path(args.boxes_json)
-    payload = json.loads(boxes_path.read_text(encoding="utf-8"))
+    payload = json.loads(boxes_path.read_text(encoding="utf-8-sig"))
     tracked = fill_single_track_gaps(payload, max_gap=args.max_gap, max_distance=args.max_distance)
 
     out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     tracked_path = out_dir / "boxes_tracked.json"
-    tracked_path.write_text(json.dumps(tracked, indent=2), encoding="utf-8")
     render_tracked_overlay(args.input_video, tracked["frames"], out_dir / "overlay_tracked.mp4")
+    tracked_path.write_text(json.dumps(tracked, indent=2, allow_nan=False), encoding="utf-8")
 
     print(f"Wrote {tracked_path}")
     print(f"Wrote {out_dir / 'overlay_tracked.mp4'}")
