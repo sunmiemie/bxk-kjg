@@ -232,7 +232,10 @@ def run_pipeline(
             fused = fuse_saliency(fmhi, pixel, region, **cfg["fusion"])
             fused = np.where(valid_roi, fused, 0.0).astype(np.float32)
             mask = threshold_saliency(fused, **cfg["thresholding"])
+            mask = np.where(valid_roi, mask, 0).astype(np.uint8)
             mask = postprocess_mask(mask, morph_kernel=cfg["postprocess"]["morph_kernel"])
+            # Closing can refill ignored holes or expand across the ROI edge.
+            mask = np.where(valid_roi, mask, 0).astype(np.uint8)
             boxes = boxes_from_mask(
                 mask,
                 fused,
