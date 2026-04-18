@@ -193,8 +193,12 @@ def run_pipeline(
             gray = ensure_gray(frame)
             if gray.shape != prev_gray.shape:
                 raise ValueError("Input video dimensions changed during processing")
-            registered_prev, _, _ = register_frame(gray, prev_gray, **cfg["registration"])
+            registered_prev, transform, _ = register_frame(gray, prev_gray, **cfg["registration"])
             diff = registered_difference(gray, registered_prev)
+            # The stored history belongs to the previous camera coordinates.
+            # Carry it into the current frame before accumulating new motion.
+            fmhi = cv2.warpAffine(fmhi, transform, (width, height), flags=cv2.INTER_NEAREST,
+                                  borderMode=cv2.BORDER_CONSTANT, borderValue=0)
             fmhi = compute_fmhi(
                 fmhi,
                 diff,
