@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 import numpy as np
 import cv2
 
@@ -15,6 +17,12 @@ def fuse_saliency(
     pixel_weight: float = 0.42,
     region_weight: float = 0.27,
 ) -> np.ndarray:
+    maps = (temporal, pixel, region)
+    if any(not isinstance(image, np.ndarray) or image.ndim != 2 for image in maps) or any(image.shape != temporal.shape for image in maps):
+        raise ValueError("fusion maps must be 2D arrays with equal shapes")
+    for weight in (temporal_weight, pixel_weight, region_weight):
+        if not math.isfinite(weight) or weight < 0:
+            raise ValueError("fusion weights must be finite and nonnegative")
     fused = (
         float(temporal_weight) * normalize01(temporal)
         + float(pixel_weight) * normalize01(pixel)
@@ -30,8 +38,20 @@ def threshold_saliency(
     fixed: float = 0.45,
     percentile: float = 97.5,
 ) -> np.ndarray:
+    if not isinstance(saliency, np.ndarray) or saliency.ndim != 2:
+        raise ValueError("saliency must be a 2D array")
+    if not isinstance(method, str):
+        raise ValueError("threshold method must be a string")
+    if not math.isfinite(fixed) or not 0 <= fixed <= 1:
+        raise ValueError("fixed threshold must be finite and in [0, 1]")
+    if not math.isfinite(percentile) or not 0 <= percentile <= 100:
+        raise ValueError("percentile must be finite and in [0, 100]")
     sal = normalize01(saliency)
     method = method.lower()
+    if method not in {"fixed", "percentile", "otsu"}:
+        raise ValueError(f"Unknown threshold method: {method}")
+    if not sal.size:
+        return np.zeros(sal.shape, dtype=np.uint8)
     if method == "fixed":
         mask = sal >= float(fixed)
     elif method == "percentile":
