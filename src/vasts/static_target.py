@@ -21,13 +21,21 @@ def detect_static_dark_blobs(
     max_height: int = 30,
 ) -> list[dict[str, Any]]:
     gray = ensure_gray(frame)
+    if not isinstance(roi_mask, np.ndarray) or roi_mask.shape != gray.shape:
+        raise ValueError("roi_mask must have the same 2D shape as the grayscale frame")
+    if not np.isfinite(threshold_offset) or threshold_offset <= 0:
+        raise ValueError("threshold_offset must be finite and positive")
     valid = roi_mask.astype(bool)
     if not np.any(valid):
         return []
 
     roi_values = gray[valid]
     background = float(np.median(roi_values))
-    threshold = max(0.0, background - float(threshold_offset))
+    threshold = background - float(threshold_offset)
+    if threshold < 0:
+        # A clipped zero threshold would turn a uniformly black ROI into a blob
+        # despite there being no contrast against the estimated background.
+        return []
     binary = ((gray <= threshold) & valid).astype(np.uint8)
 
     count, labels, stats, _ = cv2.connectedComponentsWithStats(binary, connectivity=8)

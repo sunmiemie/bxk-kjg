@@ -169,11 +169,15 @@ def run_pipeline(
         prev_gray = ensure_gray(frame)
         valid_roi = _roi_mask((height, width), cfg["roi"])
         fmhi = np.zeros_like(prev_gray, dtype=np.uint8)
-        frames: list[dict[str, Any]] = [{"frame_index": 0, "boxes": []}]
+        first_boxes = []
+        if cfg["static_target"]["enabled"]:
+            first_boxes = detect_static_dark_blobs(prev_gray, valid_roi, **{k: v for k, v in cfg["static_target"].items() if k != "enabled"})
+            first_boxes = deduplicate_boxes(_filter_boxes(first_boxes, cfg["box_filter"]), center_distance=10.0)
+        frames: list[dict[str, Any]] = [{"frame_index": 0, "boxes": first_boxes}]
         if save_video:
             overlay_writer = _create_writer(out_dir / "overlay.mp4", fps, (width, height))
             saliency_writer = _create_writer(out_dir / "saliency.mp4", fps, (width, height))
-            overlay_writer.write(_draw_overlay(frame, [], 0))
+            overlay_writer.write(_draw_overlay(frame, first_boxes, 0))
             saliency_writer.write(np.zeros_like(frame))
 
         if save_maps:
