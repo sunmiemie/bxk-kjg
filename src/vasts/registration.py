@@ -34,7 +34,7 @@ def _phase_fallback(
     except cv2.error:
         return _identity_transform(), "identity"
 
-    if not np.isfinite(shift[0]) or not np.isfinite(shift[1]) or response < response_threshold:
+    if not np.isfinite(shift[0]) or not np.isfinite(shift[1]) or not np.isfinite(response) or response < response_threshold:
         return _identity_transform(), "identity"
 
     transform = np.array(
@@ -56,6 +56,8 @@ def register_frame(
     """Register moving frame to reference using ORB/RANSAC, then phase/identity fallback."""
     reference_gray = ensure_gray(reference)
     moving_gray = ensure_gray(moving)
+    if reference_gray.shape != moving_gray.shape:
+        raise ValueError("Registration frames must have equal dimensions")
     shape = reference_gray.shape
 
     orb = cv2.ORB_create(nfeatures=int(orb_features))
@@ -76,7 +78,8 @@ def register_frame(
                 method=cv2.RANSAC,
                 ransacReprojThreshold=float(ransac_reproj_threshold),
             )
-            if transform is not None and inliers is not None and int(inliers.sum()) >= min_matches // 2:
+            if (transform is not None and transform.shape == (2, 3) and np.isfinite(transform).all()
+                    and inliers is not None and int(inliers.sum()) >= min_matches // 2):
                 transform = transform.astype(np.float32)
                 return _warp(moving_gray, transform, shape), transform, "orb"
 

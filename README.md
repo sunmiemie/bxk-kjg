@@ -48,7 +48,7 @@ No official reusable implementation was found during web search by title, DOI, a
 Override parameters with a JSON file or inline JSON:
 
 ```powershell
-$env:PYTHONPATH = "D:\Users\Desktop\bxk\visible_aerial_spatiotemporal_saliency\src"
+$env:PYTHONPATH = Join-Path (Get-Location) "src"
 python -m vasts.cli --synthetic --output-dir runs\demo --config '{"thresholding":{"method":"percentile","percentile":98}}'
 ```
 
@@ -65,7 +65,7 @@ vasts --input D:\path\to\video.mp4 --output-dir runs\video --max-frames 200 --sa
 Or run without installation by setting `PYTHONPATH`:
 
 ```powershell
-$env:PYTHONPATH = "D:\Users\Desktop\bxk\visible_aerial_spatiotemporal_saliency\src"
+$env:PYTHONPATH = Join-Path (Get-Location) "src"
 python -m vasts.cli --synthetic --output-dir runs\synthetic --max-frames 20 --save-video --save-maps
 python -m vasts.cli --input D:\path\to\video.mp4 --output-dir runs\video --max-frames 200 --save-video
 ```
@@ -112,7 +112,7 @@ With `--save-maps`:
 - The paper uses visible aerial video and does not publish a fixed final threshold. This implementation exposes `otsu`, `percentile`, and `fixed`.
 - Fusion weights are the paper defaults. The paper says they were obtained offline, but no training details are provided.
 - Registration is affine only. Strong parallax, rolling shutter, heavy blur, low texture, or very large camera motion can still cause false positives.
-- Output boxes are derived independently per frame; no tracker is applied.
+- Detector boxes are derived independently per frame. The optional `vasts-track` command retains the strongest box per supplied frame and interpolates short gaps; it is a single-target heuristic, not a multi-object tracker. Interpolated boxes are explicitly marked.
 
 ## NSTSM Transfer Understanding
 
@@ -129,3 +129,5 @@ python -m pytest
 ```
 
 The tests use only synthetic data and local temporary files.
+
+Input validation, ROI handling, registered motion history, static-target behavior, and tracking edge cases are documented in [maintenance notes](docs/maintenance-notes.md). These repairs have synthetic regression coverage; they are not measured accuracy improvements on real video datasets.
