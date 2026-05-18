@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import math
 
 import numpy as np
 import cv2
@@ -28,12 +29,21 @@ def make_synthetic_video(
     target_size: tuple[int, int] = (10, 8),
     fps: float = 10.0,
 ) -> Path:
-    if int(frame_count) <= 0:
-        raise ValueError("frame_count must be positive")
+    if isinstance(frame_count, bool) or not isinstance(frame_count, int) or frame_count <= 0:
+        raise ValueError("frame_count must be a positive integer")
+    for name, values in (("size", size), ("target_size", target_size)):
+        if not isinstance(values, (tuple, list)) or len(values) != 2 or any(isinstance(value, bool) or not isinstance(value, int) or value <= 0 for value in values):
+            raise ValueError(f"{name} must contain two positive integers")
+    width, height = size
+    target_w, target_h = target_size
+    if width % 2 or height % 2:
+        raise ValueError("MP4 synthetic dimensions must be even to avoid codec cropping")
+    if target_w > width - 4 or target_h > height - 4:
+        raise ValueError("target must fit inside the image with a two-pixel margin")
+    if isinstance(fps, bool) or not isinstance(fps, (int, float)) or not math.isfinite(fps) or fps <= 0:
+        raise ValueError("fps must be finite and positive")
     path = Path(video_path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    width, height = int(size[0]), int(size[1])
-    target_w, target_h = int(target_size[0]), int(target_size[1])
     background = _base_background(width + 32, height + 32)
     writer = cv2.VideoWriter(
         str(path),
@@ -42,6 +52,7 @@ def make_synthetic_video(
         (width, height),
     )
     if not writer.isOpened():
+        writer.release()
         raise RuntimeError(f"Could not open video writer: {path}")
 
     try:
@@ -53,8 +64,8 @@ def make_synthetic_video(
             target_y = 20 + index * 2
             target_x = min(width - target_w - 2, target_x)
             target_y = min(height - target_h - 2, target_y)
-            cv2.rectangle(gray, (target_x, target_y), (target_x + target_w, target_y + target_h), 235, -1)
-            cv2.rectangle(gray, (target_x, target_y), (target_x + target_w, target_y + target_h), 255, 1)
+            cv2.rectangle(gray, (target_x, target_y), (target_x + target_w - 1, target_y + target_h - 1), 235, -1)
+            cv2.rectangle(gray, (target_x, target_y), (target_x + target_w - 1, target_y + target_h - 1), 255, 1)
             frame = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
             writer.write(frame)
     finally:
