@@ -7,11 +7,11 @@ import numpy as np
 import cv2
 
 
-def _base_background(width: int, height: int) -> np.ndarray:
+def _base_background(width: int, height: int, seed: int = 42) -> np.ndarray:
     y = np.linspace(0, 1, height, dtype=np.float32)[:, None]
     x = np.linspace(0, 1, width, dtype=np.float32)[None, :]
     base = 70 + 60 * x + 30 * y
-    rng = np.random.default_rng(42)
+    rng = np.random.default_rng(seed)
     noise = rng.normal(0, 5, size=(height, width)).astype(np.float32)
     image = np.clip(base + noise, 0, 255).astype(np.uint8)
     for px in range(8, width, 17):
@@ -28,6 +28,7 @@ def make_synthetic_video(
     size: tuple[int, int] = (160, 120),
     target_size: tuple[int, int] = (10, 8),
     fps: float = 10.0,
+    seed: int = 42,
 ) -> Path:
     if isinstance(frame_count, bool) or not isinstance(frame_count, int) or frame_count <= 0:
         raise ValueError("frame_count must be a positive integer")
@@ -42,9 +43,11 @@ def make_synthetic_video(
         raise ValueError("target must fit inside the image with a two-pixel margin")
     if isinstance(fps, bool) or not isinstance(fps, (int, float)) or not math.isfinite(fps) or fps <= 0:
         raise ValueError("fps must be finite and positive")
+    if isinstance(seed, bool) or not isinstance(seed, int) or seed < 0:
+        raise ValueError("seed must be a nonnegative integer")
     path = Path(video_path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    background = _base_background(width + 32, height + 32)
+    background = _base_background(width + 32, height + 32, seed)
     writer = cv2.VideoWriter(
         str(path),
         cv2.VideoWriter_fourcc(*"mp4v"),

@@ -50,6 +50,7 @@ def _run(args) -> int:
             frame_count=frame_count,
             size=(int(synth_cfg["width"]), int(synth_cfg["height"])),
             fps=float(synth_cfg["fps"]),
+            seed=synth_cfg["seed"],
         )
         source_mode = "synthetic"
     elif args.input_path:

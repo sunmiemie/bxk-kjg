@@ -73,6 +73,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "max_height": 30,
     },
     "synthetic": {
+        "seed": 42,
         "frame_count": 20,
         "width": 160,
         "height": 120,
@@ -221,6 +222,7 @@ def _validate_config(config: dict[str, Any]) -> dict[str, Any]:
     _require_number(config, "static_target.max_width", min_value=1)
     _require_number(config, "static_target.max_height", min_value=1)
     _require_number(config, "synthetic.frame_count", min_value=1)
+    _require_number(config, "synthetic.seed", min_value=0)
     _require_number(config, "synthetic.width", min_value=16)
     _require_number(config, "synthetic.height", min_value=16)
     _require_number(config, "synthetic.fps", min_value=1)
