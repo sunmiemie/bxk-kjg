@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -166,6 +167,13 @@ def run_pipeline(
             raise ValueError(f"Input video has no frames: {input_path}")
 
         height, width = frame.shape[:2]
+        reported_fps = float(capture.get(cv2.CAP_PROP_FPS))
+        reported_count = float(capture.get(cv2.CAP_PROP_FRAME_COUNT))
+        video_info = {"width": width, "height": height, "fps": fps,
+                      "reported_fps": reported_fps if math.isfinite(reported_fps) else None,
+                      "fps_fallback_used": not math.isfinite(reported_fps) or reported_fps <= 0,
+                      "reported_frame_count": int(reported_count) if math.isfinite(reported_count) and reported_count >= 0 else None,
+                      "timestamp_basis": "frame_index / fps; estimated constant frame rate"}
         prev_gray = ensure_gray(frame)
         valid_roi = _roi_mask((height, width), cfg["roi"])
         fmhi = np.zeros_like(prev_gray, dtype=np.uint8)
@@ -173,7 +181,7 @@ def run_pipeline(
         if cfg["static_target"]["enabled"]:
             first_boxes = detect_static_dark_blobs(prev_gray, valid_roi, **{k: v for k, v in cfg["static_target"].items() if k != "enabled"})
             first_boxes = deduplicate_boxes(_filter_boxes(first_boxes, cfg["box_filter"]), center_distance=10.0)
-        frames: list[dict[str, Any]] = [{"frame_index": 0, "boxes": first_boxes}]
+        frames: list[dict[str, Any]] = [{"frame_index": 0, "timestamp_seconds": 0.0, "registration_method": "initial", "boxes": first_boxes}]
         if save_video:
             overlay_writer = _create_writer(out_dir / "overlay.mp4", fps, (width, height))
             saliency_writer = _create_writer(out_dir / "saliency.mp4", fps, (width, height))
@@ -197,7 +205,7 @@ def run_pipeline(
             gray = ensure_gray(frame)
             if gray.shape != prev_gray.shape:
                 raise ValueError("Input video dimensions changed during processing")
-            registered_prev, transform, _ = register_frame(gray, prev_gray, **cfg["registration"])
+            registered_prev, transform, registration_method = register_frame(gray, prev_gray, **cfg["registration"])
             diff = registered_difference(gray, registered_prev)
             # The stored history belongs to the previous camera coordinates.
             # Carry it into the current frame before accumulating new motion.
@@ -256,7 +264,8 @@ def run_pipeline(
                 boxes = boxes + _filter_boxes(static_boxes, cfg["box_filter"])
             boxes = deduplicate_boxes(boxes, center_distance=10.0)
 
-            frames.append({"frame_index": frame_index, "boxes": boxes})
+            frames.append({"frame_index": frame_index, "timestamp_seconds": frame_index / fps,
+                           "registration_method": registration_method, "boxes": boxes})
             if save_maps:
                 _save_maps(out_dir / "maps", frame_index, diff=diff, fmhi=fmhi, pixel=pixel, region=region, fused=fused, mask=mask)
             if overlay_writer is not None and saliency_writer is not None:
@@ -275,12 +284,13 @@ def run_pipeline(
 
     payload = {
         "schema_version": 1,
-        "source": {"mode": source_mode, "path": str(input_path), "max_frames": max_frames},
+        "source": {"mode": source_mode, "path": str(input_path), "max_frames": max_frames, **video_info},
         "config": cfg,
         "summary": {
             "frames_processed": frames_processed,
             "frames_with_boxes": sum(1 for item in frames if item["boxes"]),
             "total_boxes": sum(len(item["boxes"]) for item in frames),
+            "registration_methods": dict(Counter(item["registration_method"] for item in frames[1:])),
         },
         "frames": frames,
     }
