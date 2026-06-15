@@ -9,6 +9,7 @@ import cv2
 
 from .pipeline import _create_writer, _draw_overlay, _open_capture, _capture_fps
 from .tracking import fill_single_track_gaps
+from .json_output import write_json_atomic
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -86,7 +87,7 @@ def _run(args) -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
     tracked_path = out_dir / "boxes_tracked.json"
     render_tracked_overlay(args.input_video, tracked["frames"], out_dir / "overlay_tracked.mp4")
-    tracked_path.write_text(json.dumps(tracked, indent=2, allow_nan=False), encoding="utf-8")
+    write_json_atomic(tracked_path, tracked)
 
     print(f"Wrote {tracked_path}")
     print(f"Wrote {out_dir / 'overlay_tracked.mp4'}")

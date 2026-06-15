@@ -13,6 +13,7 @@ import cv2
 from .config import DEFAULT_CONFIG, deep_update, _validate_config
 from .fusion import fuse_saliency, postprocess_mask, threshold_saliency
 from .image_utils import colorize_saliency, ensure_gray, to_uint8
+from .json_output import write_json_atomic
 from .pixel_saliency import pixel_saliency_map
 from .region_saliency import region_saliency_map
 from .regions import boxes_from_mask, deduplicate_boxes
@@ -295,5 +296,5 @@ def run_pipeline(
         "frames": frames,
     }
     boxes_path = out_dir / "boxes.json"
-    boxes_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    write_json_atomic(boxes_path, payload)
     return PipelineResult(output_dir=out_dir, frames_processed=frames_processed, boxes=frames, boxes_path=boxes_path)
