@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 import cv2
+from pathlib import Path
 
 
 def ensure_gray(frame: np.ndarray) -> np.ndarray:
@@ -44,3 +45,14 @@ def to_uint8(image: np.ndarray) -> np.ndarray:
 
 def colorize_saliency(image: np.ndarray) -> np.ndarray:
     return cv2.applyColorMap(to_uint8(image), cv2.COLORMAP_INFERNO)
+
+
+def write_png(path, image: np.ndarray) -> None:
+    """Encode in memory and use Python paths, including Windows Unicode names."""
+    try:
+        success, encoded = cv2.imencode(".png", image)
+    except cv2.error as error:
+        raise RuntimeError(f"Could not encode PNG map: {path}") from error
+    if not success:
+        raise RuntimeError(f"Could not encode PNG map: {path}")
+    Path(path).write_bytes(encoded.tobytes())

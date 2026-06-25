@@ -12,7 +12,7 @@ import cv2
 
 from .config import DEFAULT_CONFIG, deep_update, _validate_config
 from .fusion import fuse_saliency, postprocess_mask, threshold_saliency
-from .image_utils import colorize_saliency, ensure_gray, to_uint8
+from .image_utils import colorize_saliency, ensure_gray, to_uint8, write_png
 from .json_output import write_json_atomic
 from .pixel_saliency import pixel_saliency_map
 from .region_saliency import region_saliency_map
@@ -93,8 +93,7 @@ def _save_maps(
     }
     for suffix, image in outputs.items():
         path = str(prefix) + f"_{suffix}.png"
-        if not cv2.imwrite(path, image):
-            raise RuntimeError(f"Could not write map image: {path}")
+        write_png(path, image)
 
 
 def _roi_mask(shape: tuple[int, int], roi_cfg: dict[str, Any]) -> np.ndarray:
