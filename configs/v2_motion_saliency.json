@@ -1,0 +1,53 @@
+{
+  "registration": {
+    "orb_features": 1,
+    "min_matches": 999,
+    "phase_response_threshold": 0.0
+  },
+  "temporal": {
+    "threshold": 10,
+    "decay": 8,
+    "candidate_threshold": 1,
+    "min_area": 2,
+    "max_area_ratio": 0.002,
+    "border_margin": 0
+  },
+  "spatial": {
+    "pixel_enabled": true,
+    "region_enabled": false,
+    "cr_factor": 3.0,
+    "er_factor": 6.0
+  },
+  "fusion": {
+    "temporal_weight": 0.60,
+    "pixel_weight": 0.40,
+    "region_weight": 0.0
+  },
+  "thresholding": {
+    "method": "percentile",
+    "percentile": 99.90
+  },
+  "postprocess": {
+    "morph_kernel": 1,
+    "min_area": 2,
+    "max_area_ratio": 0.001
+  },
+  "roi": {
+    "enabled": true,
+    "x_min": 540,
+    "y_min": 300,
+    "x_max": 760,
+    "y_max": 400,
+    "ignore_rectangles": [
+      {"x": 535, "y": 315, "w": 48, "h": 62},
+      {"x": 735, "y": 300, "w": 45, "h": 95}
+    ]
+  },
+  "box_filter": {
+    "min_width": 2,
+    "min_height": 1,
+    "max_width": 55,
+    "max_height": 25,
+    "min_score": 0.40
+  }
+}

@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "visible-aerial-spatiotemporal-saliency"
+version = "0.1.0"
+description = "Lightweight reproduction of visible aerial moving object detection based on spatiotemporal saliency."
+requires-python = ">=3.10"
+dependencies = [
+  "numpy",
+  "opencv-python",
+]
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[project.scripts]
+vasts = "vasts.cli:main"
+vasts-track = "vasts.track_cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
