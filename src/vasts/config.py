@@ -70,6 +70,15 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "max_width": 50,
         "max_height": 30,
     },
+    "lite": {
+        "frame_stride": 1,
+        "hold_missing_frames": 0,
+        "motion_enabled": True,
+        "motion_threshold": 8,
+        "motion_min_area": 2,
+        "motion_max_area": 120,
+        "dedupe_center_distance": 10,
+    },
     "synthetic": {
         "frame_count": 20,
         "width": 160,
@@ -135,6 +144,7 @@ def _validate_config(config: dict[str, Any]) -> dict[str, Any]:
         "roi",
         "box_filter",
         "static_target",
+        "lite",
         "synthetic",
     ]
     for section in required_sections:
@@ -198,6 +208,13 @@ def _validate_config(config: dict[str, Any]) -> dict[str, Any]:
     _require_number(config, "static_target.min_height", min_value=1)
     _require_number(config, "static_target.max_width", min_value=1)
     _require_number(config, "static_target.max_height", min_value=1)
+    _require_number(config, "lite.frame_stride", min_value=1)
+    _require_number(config, "lite.hold_missing_frames", min_value=0)
+    _require_bool(config, "lite.motion_enabled")
+    _require_number(config, "lite.motion_threshold", min_value=0, max_value=255)
+    _require_number(config, "lite.motion_min_area", min_value=1)
+    _require_number(config, "lite.motion_max_area", min_value=1)
+    _require_number(config, "lite.dedupe_center_distance", min_value=0)
     _require_number(config, "synthetic.frame_count", min_value=1)
     _require_number(config, "synthetic.width", min_value=16)
     _require_number(config, "synthetic.height", min_value=16)

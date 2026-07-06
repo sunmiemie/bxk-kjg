@@ -70,6 +70,31 @@ python -m vasts.cli --synthetic --output-dir runs\synthetic --max-frames 20 --sa
 python -m vasts.cli --input D:\path\to\video.mp4 --output-dir runs\video --max-frames 200 --save-video
 ```
 
+## Board-Oriented V3-Lite
+
+`vasts-lite` is the deployment-oriented path for embedded boards. It keeps original-frame coordinates but only computes on the configured ROI crop, and it skips full-frame saliency videos by default.
+
+```powershell
+$env:PYTHONPATH = "D:\Users\Desktop\bxk\visible_aerial_spatiotemporal_saliency\src"
+python -m vasts.lite_cli --input D:\path\to\video.mp4 --output-dir runs\lite --config configs\v3_lite_board.json
+```
+
+Use `--save-video` only for debugging because video encoding is slow on boards:
+
+```powershell
+python -m vasts.lite_cli --input D:\path\to\video.mp4 --output-dir runs\lite_debug --save-video --config configs\v3_lite_board.json
+```
+
+The lite path uses:
+
+- ROI crop at original pixel resolution.
+- Static dark target detection for hovering UAVs.
+- Simple frame difference for moving UAVs.
+- Connected components, size filtering, and local deduplication.
+- Optional frame stride and short hold of recent detections.
+
+It writes `boxes_lite.json` and, only when requested, `overlay_lite.mp4`.
+
 ## Outputs
 
 Every run writes:
