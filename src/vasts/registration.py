@@ -21,6 +21,19 @@ def _warp(frame: np.ndarray, transform: np.ndarray, shape: tuple[int, int]) -> n
     )
 
 
+def valid_registration_mask(shape: tuple[int, int], transform: np.ndarray) -> np.ndarray:
+    """Pixels fully supported by the previous frame's bilinear sample footprint."""
+    if len(shape) != 2 or any(isinstance(value, bool) or not isinstance(value, int) or value <= 0 for value in shape):
+        raise ValueError("registration mask shape must contain positive height and width")
+    transform = np.asarray(transform, dtype=np.float64)
+    if transform.shape != (2, 3) or not np.isfinite(transform).all():
+        raise ValueError("registration transform must be a finite 2x3 matrix")
+    height, width = shape
+    coverage = cv2.warpAffine(np.ones(shape, dtype=np.float32), transform, (width, height),
+                              flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=0)
+    return coverage >= 1.0 - 1e-6
+
+
 def _phase_fallback(
     reference_gray: np.ndarray,
     moving_gray: np.ndarray,

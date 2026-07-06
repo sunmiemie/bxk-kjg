@@ -17,7 +17,7 @@ from .json_output import write_json_atomic
 from .pixel_saliency import pixel_saliency_map
 from .region_saliency import region_saliency_map
 from .regions import boxes_from_mask, deduplicate_boxes
-from .registration import register_frame
+from .registration import register_frame, valid_registration_mask
 from .static_target import detect_static_dark_blobs
 from .temporal import compute_fmhi, motion_regions, registered_difference
 
@@ -207,6 +207,8 @@ def run_pipeline(
                 raise ValueError("Input video dimensions changed during processing")
             registered_prev, transform, registration_method = register_frame(gray, prev_gray, **cfg["registration"])
             diff = registered_difference(gray, registered_prev)
+            registration_valid = valid_registration_mask((height, width), transform)
+            diff = np.where(registration_valid, diff, 0).astype(np.uint8)
             # The stored history belongs to the previous camera coordinates.
             # Carry it into the current frame before accumulating new motion.
             fmhi = cv2.warpAffine(fmhi, transform, (width, height), flags=cv2.INTER_NEAREST,
@@ -217,7 +219,7 @@ def run_pipeline(
                 threshold=cfg["temporal"]["threshold"],
                 decay=cfg["temporal"]["decay"],
             )
-            fmhi = np.where(valid_roi, fmhi, 0).astype(np.uint8)
+            fmhi = np.where(valid_roi & registration_valid, fmhi, 0).astype(np.uint8)
             motion_cfg = {key: cfg["temporal"][key] for key in ["candidate_threshold", "min_area", "max_area_ratio", "border_margin"]}
             candidates = motion_regions(fmhi, **motion_cfg)
 
