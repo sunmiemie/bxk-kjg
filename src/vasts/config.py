@@ -79,6 +79,14 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "motion_max_area": 120,
         "dedupe_center_distance": 10,
     },
+    "trajectory_filter": {
+        "enabled": False,
+        "min_hits": 2,
+        "max_missing_frames": 3,
+        "max_center_distance": 18.0,
+        "max_area_ratio_change": 4.0,
+        "single_target": False,
+    },
     "synthetic": {
         "frame_count": 20,
         "width": 160,
@@ -145,6 +153,7 @@ def _validate_config(config: dict[str, Any]) -> dict[str, Any]:
         "box_filter",
         "static_target",
         "lite",
+        "trajectory_filter",
         "synthetic",
     ]
     for section in required_sections:
@@ -215,6 +224,12 @@ def _validate_config(config: dict[str, Any]) -> dict[str, Any]:
     _require_number(config, "lite.motion_min_area", min_value=1)
     _require_number(config, "lite.motion_max_area", min_value=1)
     _require_number(config, "lite.dedupe_center_distance", min_value=0)
+    _require_bool(config, "trajectory_filter.enabled")
+    _require_number(config, "trajectory_filter.min_hits", min_value=1)
+    _require_number(config, "trajectory_filter.max_missing_frames", min_value=0)
+    _require_number(config, "trajectory_filter.max_center_distance", min_value=0)
+    _require_number(config, "trajectory_filter.max_area_ratio_change", min_value=1)
+    _require_bool(config, "trajectory_filter.single_target")
     _require_number(config, "synthetic.frame_count", min_value=1)
     _require_number(config, "synthetic.width", min_value=16)
     _require_number(config, "synthetic.height", min_value=16)

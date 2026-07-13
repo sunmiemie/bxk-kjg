@@ -1,0 +1,47 @@
+{
+  "roi": {
+    "enabled": true,
+    "x_min": 540,
+    "y_min": 300,
+    "x_max": 760,
+    "y_max": 400,
+    "ignore_rectangles": [
+      {"x": 535, "y": 315, "w": 48, "h": 62},
+      {"x": 735, "y": 300, "w": 45, "h": 95}
+    ]
+  },
+  "box_filter": {
+    "min_width": 2,
+    "min_height": 1,
+    "max_width": 55,
+    "max_height": 25,
+    "min_score": 0.40
+  },
+  "static_target": {
+    "enabled": true,
+    "threshold_offset": 22,
+    "min_area": 2,
+    "max_area": 180,
+    "min_width": 2,
+    "min_height": 1,
+    "max_width": 45,
+    "max_height": 18
+  },
+  "lite": {
+    "frame_stride": 1,
+    "hold_missing_frames": 0,
+    "motion_enabled": true,
+    "motion_threshold": 8,
+    "motion_min_area": 2,
+    "motion_max_area": 120,
+    "dedupe_center_distance": 10
+  },
+  "trajectory_filter": {
+    "enabled": true,
+    "min_hits": 3,
+    "max_missing_frames": 4,
+    "max_center_distance": 18,
+    "max_area_ratio_change": 4,
+    "single_target": true
+  }
+}

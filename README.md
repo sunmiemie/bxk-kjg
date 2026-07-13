@@ -72,7 +72,23 @@ python -m vasts.cli --input D:\path\to\video.mp4 --output-dir runs\video --max-f
 
 ## Board-Oriented V3-Lite
 
-`vasts-lite` is the deployment-oriented path for embedded boards. It keeps original-frame coordinates but only computes on the configured ROI crop, and it skips full-frame saliency videos by default.
+`V3LiteDetector` is the deployment-oriented API for embedded boards. The caller supplies one decoded camera image at a time, while the detector keeps only the previous ROI image and lightweight trajectory state in memory. There is no `VideoCapture`, MP4 decoding, JSON output, or video encoding in `update()`.
+
+```python
+from vasts.config import load_config
+from vasts.lite_detector import V3LiteDetector
+
+detector = V3LiteDetector(load_config("configs/v3_lite_trajectory.json"))
+
+while True:
+    frame = camera.get_image()  # BGR image, or an 8-bit grayscale/Y image
+    result = detector.update(frame)
+    send_boxes(result.boxes)
+```
+
+Pass the camera's grayscale or Y plane directly when available to avoid BGR-to-gray conversion. Keep the input resolution fixed while running; call `detector.reset()` before starting a new camera sequence or changing resolution.
+
+`vasts-lite` remains as an offline video adapter for tuning and regression tests. It uses the same `V3LiteDetector` core, keeps original-frame box coordinates, computes only on the configured ROI crop, and skips overlay video generation by default.
 
 ```powershell
 $env:PYTHONPATH = "D:\Users\Desktop\bxk\visible_aerial_spatiotemporal_saliency\src"
@@ -92,8 +108,31 @@ The lite path uses:
 - Simple frame difference for moving UAVs.
 - Connected components, size filtering, and local deduplication.
 - Optional frame stride and short hold of recent detections.
+- Optional trajectory confirmation to suppress one-frame false positives.
 
 It writes `boxes_lite.json` and, only when requested, `overlay_lite.mp4`.
+
+## V3-Lite With Trajectory Confirmation
+
+`configs\v3_lite_trajectory.json` adds a lightweight online trajectory filter after candidate detection. A candidate is output only after it appears consistently for several frames with a reasonable center displacement and box-area change. Short missing runs can be held with the last confirmed box.
+
+```powershell
+$env:PYTHONPATH = "D:\Users\Desktop\bxk\visible_aerial_spatiotemporal_saliency\src"
+python -m vasts.lite_cli --input D:\path\to\video.mp4 --output-dir runs\lite_trajectory --config configs\v3_lite_trajectory.json
+```
+
+Use `--save-video` to inspect the result:
+
+```powershell
+python -m vasts.lite_cli --input D:\path\to\video.mp4 --output-dir runs\lite_trajectory_debug --save-video --config configs\v3_lite_trajectory.json
+```
+
+Main trajectory parameters:
+
+- `trajectory_filter.min_hits`: detections needed before a target is trusted.
+- `trajectory_filter.max_missing_frames`: short gaps to keep the last confirmed box.
+- `trajectory_filter.max_center_distance`: maximum allowed frame-to-frame position jump.
+- `trajectory_filter.single_target`: keep only the best confirmed track when the scene should contain one UAV.
 
 ## Outputs
 
@@ -137,7 +176,7 @@ With `--save-maps`:
 - The paper uses visible aerial video and does not publish a fixed final threshold. This implementation exposes `otsu`, `percentile`, and `fixed`.
 - Fusion weights are the paper defaults. The paper says they were obtained offline, but no training details are provided.
 - Registration is affine only. Strong parallax, rolling shutter, heavy blur, low texture, or very large camera motion can still cause false positives.
-- Output boxes are derived independently per frame; no tracker is applied.
+- The default paper-style and base `v3-lite` outputs are per-frame detections. The trajectory config adds a lightweight online confirmation filter, not a full multi-object tracker.
 
 ## NSTSM Transfer Understanding
 
