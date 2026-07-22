@@ -2,10 +2,15 @@ from __future__ import annotations
 
 import numpy as np
 import cv2
+from .image_utils import ensure_gray
 
 
 def registered_difference(reference_gray: np.ndarray, registered_moving_gray: np.ndarray) -> np.ndarray:
-    return cv2.absdiff(reference_gray.astype(np.uint8), registered_moving_gray.astype(np.uint8))
+    reference = ensure_gray(reference_gray)
+    moving = ensure_gray(registered_moving_gray)
+    if reference.shape != moving.shape:
+        raise ValueError("difference images must have equal shapes")
+    return cv2.absdiff(reference, moving)
 
 
 def compute_fmhi(
@@ -15,12 +20,20 @@ def compute_fmhi(
     threshold: int = 35,
     decay: int = 25,
 ) -> np.ndarray:
-    previous = previous_mhi.astype(np.int16, copy=False)
-    diff_i = diff.astype(np.int16, copy=False)
+    if any(not isinstance(image, np.ndarray) or image.ndim != 2 for image in (previous_mhi, diff)):
+        raise ValueError("FMHI inputs must be grayscale 2D arrays")
+    previous_u8, diff_u8 = ensure_gray(previous_mhi), ensure_gray(diff)
+    if previous_u8.shape != diff_u8.shape:
+        raise ValueError("FMHI inputs must have equal shapes")
+    for name, value in (("threshold", threshold), ("decay", decay)):
+        if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= 255:
+            raise ValueError(f"{name} must be an integer in [0, 255]")
+    previous = previous_u8.astype(np.int16)
+    diff_i = diff_u8.astype(np.int16)
     quiet = np.maximum(0, previous + diff_i - int(decay))
     quiet = np.minimum(255, quiet)
     current = quiet.astype(np.uint8)
-    current[diff >= int(threshold)] = 255
+    current[diff_u8 >= threshold] = 255
     return current
 
 
