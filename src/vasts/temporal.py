@@ -45,7 +45,15 @@ def motion_regions(
     max_area_ratio: float = 0.20,
     border_margin: int = 0,
 ) -> list[list[int]]:
-    binary = (fmhi >= int(candidate_threshold)).astype(np.uint8)
+    if not isinstance(fmhi, np.ndarray) or fmhi.ndim != 2:
+        raise ValueError("motion history must be a 2D array")
+    fmhi = ensure_gray(fmhi)
+    for name, value, minimum in (("candidate_threshold", candidate_threshold, 0), ("min_area", min_area, 1), ("border_margin", border_margin, 0)):
+        if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
+            raise ValueError(f"{name} must be an integer >= {minimum}")
+    if candidate_threshold > 255 or not np.isfinite(max_area_ratio) or not 0 <= max_area_ratio <= 1:
+        raise ValueError("threshold must be <=255 and max_area_ratio must be in [0,1]")
+    binary = ((fmhi > 0) & (fmhi >= candidate_threshold)).astype(np.uint8)
     count, labels, stats, _ = cv2.connectedComponentsWithStats(binary, connectivity=8)
     height, width = fmhi.shape[:2]
     image_area = float(height * width)
@@ -56,12 +64,10 @@ def motion_regions(
             continue
         if float(area) > image_area * float(max_area_ratio):
             continue
-        if w <= 1 or h <= 1:
-            continue
         if border_margin > 0:
-            if x <= border_margin or y <= border_margin:
+            if x < border_margin or y < border_margin:
                 continue
-            if x + w >= width - border_margin or y + h >= height - border_margin:
+            if x + w > width - border_margin or y + h > height - border_margin:
                 continue
         boxes.append([int(x), int(y), int(w), int(h)])
     return boxes
