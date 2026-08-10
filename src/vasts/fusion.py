@@ -37,6 +37,7 @@ def threshold_saliency(
     method: str = "otsu",
     fixed: float = 0.45,
     percentile: float = 97.5,
+    valid_mask: np.ndarray | None = None,
 ) -> np.ndarray:
     if not isinstance(saliency, np.ndarray) or saliency.ndim != 2:
         raise ValueError("saliency must be a 2D array")
@@ -46,29 +47,39 @@ def threshold_saliency(
         raise ValueError("fixed threshold must be finite and in [0, 1]")
     if not math.isfinite(percentile) or not 0 <= percentile <= 100:
         raise ValueError("percentile must be finite and in [0, 100]")
-    sal = normalize01(saliency)
+    if valid_mask is None:
+        valid = np.ones(saliency.shape, dtype=bool)
+    elif not isinstance(valid_mask, np.ndarray) or valid_mask.shape != saliency.shape or valid_mask.dtype != np.bool_:
+        raise ValueError("valid_mask must be a boolean array matching saliency")
+    else:
+        valid = valid_mask
+    sal = np.zeros(saliency.shape, dtype=np.float32)
+    if np.any(valid):
+        sal[valid] = normalize01(saliency[valid])
     method = method.lower()
     if method not in {"fixed", "percentile", "otsu"}:
         raise ValueError(f"Unknown threshold method: {method}")
-    if not sal.size:
+    if not sal.size or not np.any(valid):
         return np.zeros(sal.shape, dtype=np.uint8)
     if method == "fixed":
         mask = sal >= float(fixed)
     elif method == "percentile":
-        values = sal[sal > 0]
-        source = values if values.size else sal.reshape(-1)
+        values = sal[valid & (sal > 0)]
+        source = values if values.size else sal[valid]
         threshold = float(np.percentile(source, float(percentile)))
         mask = sal >= threshold if threshold > 0 else sal > 0
     elif method == "otsu":
         scaled = np.clip(sal * 255.0, 0, 255).astype(np.uint8)
-        if int(scaled.max()) == int(scaled.min()):
+        samples = scaled[valid].reshape(-1, 1)
+        if int(samples.max()) == int(samples.min()):
             mask = scaled > 0
         else:
-            _, binary = cv2.threshold(scaled, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-            mask = binary > 0
+            _, binary = cv2.threshold(samples, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            mask = np.zeros(sal.shape, dtype=bool)
+            mask[valid] = binary.reshape(-1) > 0
     else:
         raise ValueError(f"Unknown threshold method: {method}")
-    return (mask.astype(np.uint8) * 255)
+    return ((mask & valid).astype(np.uint8) * 255)
 
 
 def postprocess_mask(mask: np.ndarray, *, morph_kernel: int = 3) -> np.ndarray:
