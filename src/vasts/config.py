@@ -193,6 +193,8 @@ def _validate_config(config: dict[str, Any]) -> dict[str, Any]:
     except ValueError as exc:
         raise ValueError("thresholding.percentile must be between 0 and 100") from exc
     _require_number(config, "postprocess.morph_kernel", min_value=1)
+    if config["postprocess"]["morph_kernel"] % 2 == 0:
+        raise ValueError("postprocess.morph_kernel must be odd to preserve the pixel center")
     _require_number(config, "postprocess.min_area", min_value=1)
     _require_number(config, "postprocess.max_area_ratio", min_value=0, max_value=1)
     _require_bool(config, "roi.enabled")

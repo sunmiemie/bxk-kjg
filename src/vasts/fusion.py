@@ -83,10 +83,19 @@ def threshold_saliency(
 
 
 def postprocess_mask(mask: np.ndarray, *, morph_kernel: int = 3) -> np.ndarray:
-    kernel_size = max(1, int(morph_kernel))
+    if not isinstance(mask, np.ndarray) or mask.ndim != 2 or (mask.dtype != np.bool_ and not np.issubdtype(mask.dtype, np.number)) or np.iscomplexobj(mask):
+        raise ValueError("mask must be a real numeric or boolean 2D array")
+    if not np.isfinite(mask).all() or np.any(mask < 0):
+        raise ValueError("mask values must be finite and nonnegative")
+    if isinstance(morph_kernel, bool) or not isinstance(morph_kernel, int) or morph_kernel <= 0 or morph_kernel % 2 == 0:
+        raise ValueError("morph_kernel must be a positive odd integer")
+    binary = (mask > 0).astype(np.uint8) * 255
+    kernel_size = morph_kernel
+    if not binary.size:
+        return binary
     if kernel_size <= 1:
-        return mask.astype(np.uint8)
+        return binary
     kernel = np.ones((kernel_size, kernel_size), dtype=np.uint8)
-    opened = cv2.morphologyEx(mask.astype(np.uint8), cv2.MORPH_OPEN, kernel)
+    opened = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel)
     closed = cv2.morphologyEx(opened, cv2.MORPH_CLOSE, kernel)
     return closed
