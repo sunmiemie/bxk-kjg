@@ -19,6 +19,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output-dir", required=True, help="Directory for boxes_tracked.json and overlay_tracked.mp4")
     parser.add_argument("--max-gap", type=int, default=10, help="Maximum missing-frame gap to interpolate")
     parser.add_argument("--max-distance", type=float, default=80.0, help="Maximum center distance for linking boxes")
+    parser.add_argument("--max-speed", type=float, default=None, help="Optional maximum interpolation speed in pixels per frame")
     return parser
 
 
@@ -81,7 +82,7 @@ def _run(args) -> int:
 
     boxes_path = Path(args.boxes_json)
     payload = json.loads(boxes_path.read_text(encoding="utf-8-sig"))
-    tracked = fill_single_track_gaps(payload, max_gap=args.max_gap, max_distance=args.max_distance)
+    tracked = fill_single_track_gaps(payload, max_gap=args.max_gap, max_distance=args.max_distance, max_speed_pixels_per_frame=args.max_speed)
 
     out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)

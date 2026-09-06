@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import copy
 import math
+from bisect import bisect_left, bisect_right
+from collections import Counter
 from typing import Any
 
 
@@ -87,6 +89,7 @@ def fill_single_track_gaps(
     *,
     max_gap: int = 10,
     max_distance: float = 80.0,
+    max_speed_pixels_per_frame: float | None = None,
 ) -> dict[str, Any]:
     """Keep the strongest box per supplied frame and fill short represented gaps.
 
@@ -94,6 +97,10 @@ def fill_single_track_gaps(
     multi-object tracking; frame and observed-box metadata are preserved.
     """
     _validate_payload(payload, max_gap, max_distance)
+    if max_speed_pixels_per_frame is not None:
+        if (isinstance(max_speed_pixels_per_frame, bool) or not isinstance(max_speed_pixels_per_frame, (int, float))
+                or not math.isfinite(max_speed_pixels_per_frame) or max_speed_pixels_per_frame <= 0):
+            raise ValueError("max_speed_pixels_per_frame must be finite and positive or None")
     frames = copy.deepcopy(payload.get("frames", []))
     observations = _best_observations(frames)
 
@@ -101,18 +108,26 @@ def fill_single_track_gaps(
     by_frame: dict[int, dict[str, Any]] = {
         frame_index: _copy_track_box(box, track_id=1, interpolated=False) for frame_index, box in observations
     }
-    represented_frames = {frame["frame_index"] for frame in frames}
+    represented_frames = [frame["frame_index"] for frame in frames]
+    gap_decisions = Counter()
     for (left_frame, left_box), (right_frame, right_box) in zip(observations, observations[1:]):
         gap = right_frame - left_frame - 1
-        if gap <= 0 or gap > max_gap:
+        if gap <= 0:
             continue
-        if _distance(left_box, right_box) > max_distance:
+        if gap > max_gap:
+            gap_decisions["too_long"] += 1
             continue
-        for step in range(1, gap + 1):
-            frame_index = left_frame + step
-            if frame_index not in represented_frames:
-                continue
-            alpha = step / float(gap + 1)
+        distance = _distance(left_box, right_box)
+        if distance > max_distance:
+            gap_decisions["distance"] += 1
+            continue
+        if max_speed_pixels_per_frame is not None and distance / (gap + 1) > max_speed_pixels_per_frame:
+            gap_decisions["speed"] += 1
+            continue
+        existing = represented_frames[bisect_right(represented_frames, left_frame):bisect_left(represented_frames, right_frame)]
+        gap_decisions["interpolated" if existing else "unrepresented"] += 1
+        for frame_index in existing:
+            alpha = (frame_index - left_frame) / float(gap + 1)
             by_frame[frame_index] = _interpolate_box(left_box, right_box, alpha, track_id=1)
 
     tracked_frames = []
@@ -130,5 +145,7 @@ def fill_single_track_gaps(
         "track_observations": len(observations),
         "max_gap": int(max_gap),
         "max_distance": float(max_distance),
+        "max_speed_pixels_per_frame": max_speed_pixels_per_frame,
+        "gap_decisions": dict(gap_decisions),
     }
     return output
