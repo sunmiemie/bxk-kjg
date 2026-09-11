@@ -56,9 +56,13 @@ def render_tracked_overlay(input_video: str | Path, frames: list[dict], output_p
         frame_lookup = {int(item["frame_index"]): item.get("boxes", []) for item in frames}
         frame_index = 0
         while ok:
+            if frame.shape[:2] != (height, width):
+                raise ValueError("Input video dimensions changed during tracked rendering")
             writer.write(_draw_padded_overlay(frame, frame_lookup.get(frame_index, []), frame_index))
             frame_index += 1
             ok, frame = capture.read()
+        if frame_lookup and max(frame_lookup) >= frame_index:
+            raise ValueError("Tracking frame indices exceed the decoded input video")
     finally:
         capture.release()
         if writer is not None:
@@ -74,7 +78,7 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--max-distance must be finite and > 0")
     try:
         return _run(args)
-    except (OSError, UnicodeError, ValueError, RuntimeError) as exc:
+    except (OSError, UnicodeError, ValueError, RuntimeError, cv2.error) as exc:
         parser.error(str(exc))
 
 
@@ -85,6 +89,8 @@ def _run(args) -> int:
     tracked = fill_single_track_gaps(payload, max_gap=args.max_gap, max_distance=args.max_distance, max_speed_pixels_per_frame=args.max_speed)
 
     out_dir = Path(args.output_dir)
+    if boxes_path.resolve() == (out_dir / "boxes_tracked.json").resolve():
+        raise ValueError("Tracking output must not overwrite its input boxes JSON")
     out_dir.mkdir(parents=True, exist_ok=True)
     tracked_path = out_dir / "boxes_tracked.json"
     render_tracked_overlay(args.input_video, tracked["frames"], out_dir / "overlay_tracked.mp4")

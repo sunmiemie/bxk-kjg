@@ -130,4 +130,6 @@ python -m pytest
 
 The tests use only synthetic data and local temporary files.
 
+Synthetic runs can set `{"synthetic":{"seed":7}}` in the JSON configuration. Tracking can optionally constrain interpolation with `vasts-track --input-video input.mp4 --boxes-json boxes.json --output-dir runs/tracked --max-speed 5` (pixels per frame). Result JSON includes source dimensions, estimated timestamps, registration diagnostics, and explicit interpolation metadata; see the maintenance notes for limitations.
+
 Input validation, ROI handling, registered motion history, static-target behavior, and tracking edge cases are documented in [maintenance notes](docs/maintenance-notes.md). These repairs have synthetic regression coverage; they are not measured accuracy improvements on real video datasets.
