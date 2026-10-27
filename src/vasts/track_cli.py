@@ -3,6 +3,8 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
+import tempfile
 from pathlib import Path
 
 import cv2
@@ -42,31 +44,47 @@ def _draw_padded_overlay(frame, boxes, frame_index: int):
 
 
 def render_tracked_overlay(input_video: str | Path, frames: list[dict], output_path: str | Path) -> None:
-    if Path(input_video).resolve() == Path(output_path).resolve():
+    output_path = Path(output_path)
+    if Path(input_video).resolve() == output_path.resolve():
         raise ValueError("Tracked overlay must not overwrite the input video")
     capture = _open_capture(input_video)
     writer = None
+    temporary = None
     try:
-        fps = _capture_fps(capture)
-        ok, frame = capture.read()
-        if not ok:
-            raise ValueError(f"Input video has no frames: {input_video}")
-        height, width = frame.shape[:2]
-        writer = _create_writer(Path(output_path), fps, (width, height))
-        frame_lookup = {int(item["frame_index"]): item.get("boxes", []) for item in frames}
-        frame_index = 0
-        while ok:
-            if frame.shape[:2] != (height, width):
-                raise ValueError("Input video dimensions changed during tracked rendering")
-            writer.write(_draw_padded_overlay(frame, frame_lookup.get(frame_index, []), frame_index))
-            frame_index += 1
+        try:
+            fps = _capture_fps(capture)
             ok, frame = capture.read()
-        if frame_lookup and max(frame_lookup) >= frame_index:
-            raise ValueError("Tracking frame indices exceed the decoded input video")
+            if not ok:
+                raise ValueError(f"Input video has no frames: {input_video}")
+            height, width = frame.shape[:2]
+            # Close the temporary handle before OpenCV opens it on Windows.
+            with tempfile.NamedTemporaryFile(
+                dir=output_path.parent, prefix=output_path.stem + ".",
+                suffix=output_path.suffix, delete=False,
+            ) as stream:
+                temporary = Path(stream.name)
+            writer = _create_writer(temporary, fps, (width, height))
+            frame_lookup = {int(item["frame_index"]): item.get("boxes", []) for item in frames}
+            frame_index = 0
+            while ok:
+                if frame.shape[:2] != (height, width):
+                    raise ValueError("Input video dimensions changed during tracked rendering")
+                writer.write(_draw_padded_overlay(frame, frame_lookup.get(frame_index, []), frame_index))
+                frame_index += 1
+                ok, frame = capture.read()
+            if frame_lookup and max(frame_lookup) >= frame_index:
+                raise ValueError("Tracking frame indices exceed the decoded input video")
+        finally:
+            try:
+                capture.release()
+            finally:
+                if writer is not None:
+                    writer.release()
+        # Publish only after validation and encoder finalization both succeed.
+        os.replace(temporary, output_path)
     finally:
-        capture.release()
-        if writer is not None:
-            writer.release()
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
 
 
 def main(argv: list[str] | None = None) -> int:
