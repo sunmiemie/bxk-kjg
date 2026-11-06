@@ -185,7 +185,7 @@ def _validate_config(config: dict[str, Any]) -> dict[str, Any]:
     _require_number(config, "fusion.pixel_weight", min_value=0)
     _require_number(config, "fusion.region_weight", min_value=0)
     method = config["thresholding"].get("method")
-    if method not in {"otsu", "percentile", "fixed"}:
+    if not isinstance(method, str) or method not in {"otsu", "percentile", "fixed"}:
         raise ValueError("thresholding.method must be one of: otsu, percentile, fixed")
     _require_number(config, "thresholding.fixed", min_value=0, max_value=1)
     try:

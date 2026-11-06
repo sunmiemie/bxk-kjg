@@ -26,6 +26,18 @@ def test_invalid_configuration_is_rejected(override):
         load_config(json.dumps(override))
 
 
+@pytest.mark.parametrize("method", [[], {}, None, True, 42, "unsupported"])
+def test_invalid_threshold_method_reports_configuration_error(method):
+    with pytest.raises(ValueError, match=r"thresholding\.method must be one of: otsu, percentile, fixed"):
+        load_config(json.dumps({"thresholding": {"method": method}}))
+
+
+@pytest.mark.parametrize("method", ["otsu", "percentile", "fixed"])
+def test_valid_threshold_method_is_preserved(method):
+    config = load_config(json.dumps({"thresholding": {"method": method}}))
+    assert config["thresholding"]["method"] == method
+
+
 def test_load_does_not_share_nested_lists_with_defaults_or_overrides():
     first, second = load_config(), load_config()
     first["roi"]["ignore_rectangles"].append({"x": 0})

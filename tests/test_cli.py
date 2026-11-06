@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 import cv2
+import pytest
 
 
 def _run_cli(tmp_path, *args):
@@ -141,3 +142,28 @@ def test_cli_reports_invalid_config_range(tmp_path):
 
     assert completed.returncode != 0
     assert "thresholding.percentile must be between 0 and 100" in completed.stderr
+
+
+@pytest.mark.parametrize("method", [["otsu"], {"name": "otsu"}], ids=["array", "object"])
+@pytest.mark.parametrize("config_source", ["inline", "file"])
+def test_cli_reports_invalid_threshold_method_before_output_creation(tmp_path, method, config_source):
+    config_arg = json.dumps({"thresholding": {"method": method}})
+    if config_source == "file":
+        config_path = tmp_path / "config.json"
+        config_path.write_text(config_arg, encoding="utf-8")
+        config_arg = str(config_path)
+
+    output_dir, completed = _run_cli(
+        tmp_path,
+        "--input",
+        str(tmp_path / "missing.mp4"),
+        "--output-dir",
+        str(tmp_path / "cli_out"),
+        "--config",
+        config_arg,
+    )
+
+    assert completed.returncode == 2, completed.stderr
+    assert "thresholding.method must be one of: otsu, percentile, fixed" in completed.stderr
+    assert "Traceback" not in completed.stderr
+    assert not output_dir.exists()
